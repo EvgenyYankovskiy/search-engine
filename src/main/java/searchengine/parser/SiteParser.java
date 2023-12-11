@@ -6,6 +6,7 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import searchengine.config.StopFlag;
 import searchengine.model.*;
@@ -29,9 +30,13 @@ public class SiteParser extends RecursiveAction {
     private String url;
     @Setter
     private Site site;
+    @Autowired
     private final PagesRepository pagesRepository;
+    @Autowired
     private final SitesRepository sitesRepository;
+    @Autowired
     private final LemmaRepository lemmaRepository;
+    @Autowired
     private final SearchIndexRepository searchIndexRepository;
     private static StopFlag stopFlag;
 
@@ -50,12 +55,14 @@ public class SiteParser extends RecursiveAction {
             Document document = jsoupConnect(url).parse();
             int statusCode = jsoupConnect(url).statusCode();
 
-            String path = getPath(url);
-            if (statusCode < 400 && !stopFlag.isStopFlag() && checkRepositoryPage(path, site.getId())) {
-                refreshTimeSite(site);
-                Page page = savePage(site, path, document.html(), statusCode);
-                saveLemmaAndSearchIndex(page, document.html());
-                parse(document);
+            if (statusCode < 400 && !stopFlag.isStopFlag()) {
+                String path = getPath(url);
+                if (checkRepositoryPage(path, site.getId())) {
+                    refreshTimeSite(site);
+                    Page page = savePage(site, path, document.html(), statusCode);
+                    saveLemmaAndSearchIndex(page, document.html());
+                    parse(document);
+                }
             }
         } catch (IOException e) {
             errorSite(site, e.getMessage());
@@ -71,14 +78,16 @@ public class SiteParser extends RecursiveAction {
 
         for (Element element : urls) {
             String href = element.absUrl("href");
-            String path = getPath(href).trim();
-            if (checkLink(href, document) && !stopFlag.isStopFlag() && checkRepositoryPage(path, site.getId())) {
-                SiteParser task = new SiteParser(pagesRepository, sitesRepository, lemmaRepository, searchIndexRepository, stopFlag);
-                task.setUrl(href);
-                task.setSite(site);
+            if (checkLink(href, document) && !stopFlag.isStopFlag()) {
+                String path = getPath(href).trim();
+                if (checkRepositoryPage(path, site.getId())) {
+                    SiteParser task = new SiteParser(pagesRepository, sitesRepository, lemmaRepository, searchIndexRepository, stopFlag);
+                    task.setUrl(href);
+                    task.setSite(site);
 
-                taskList.add(task);
-                task.fork();
+                    taskList.add(task);
+                    task.fork();
+                }
             }
         }
 
